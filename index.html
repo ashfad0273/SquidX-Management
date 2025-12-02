@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SquidX Attendance Dashboard</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        .loader-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .row-changed {
+            background-color: #fef9c3 !important;
+        }
+
+        .row-new {
+            background-color: #d1fae5 !important;
+        }
+
+        .disabled-overlay {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- HEADER -->
+    <header class="bg-white shadow p-4">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">SquidX Attendance Entries</h1>
+            <nav class="space-x-6 text-gray-700 font-medium">
+                <a href="#" class="hover:text-blue-500 transition-colors">Reports</a>
+                <a href="#" class="hover:text-blue-500 transition-colors">Team</a>
+                <a href="#" class="hover:text-blue-500 transition-colors">Analytics</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- SUMMARY CARDS -->
+    <section class="max-w-6xl mx-auto mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="bg-white p-4 shadow rounded text-center hover:shadow-md transition-shadow">
+            <h3 class="text-lg font-semibold text-gray-600">Total Members</h3>
+            <p id="totalMembers" class="text-2xl font-bold mt-2 text-blue-600">0</p>
+        </div>
+        <div class="bg-white p-4 shadow rounded text-center hover:shadow-md transition-shadow">
+            <h3 class="text-lg font-semibold text-gray-600">Punch-ins</h3>
+            <p id="totalPunchins" class="text-2xl font-bold mt-2 text-green-600">0</p>
+        </div>
+        <div class="bg-white p-4 shadow rounded text-center hover:shadow-md transition-shadow">
+            <h3 class="text-lg font-semibold text-gray-600">Late</h3>
+            <p id="totalLate" class="text-2xl font-bold mt-2 text-red-500">0</p>
+        </div>
+        <div class="bg-white p-4 shadow rounded text-center hover:shadow-md transition-shadow">
+            <h3 class="text-lg font-semibold text-gray-600">Absent</h3>
+            <p id="totalAbsent" class="text-2xl font-bold mt-2 text-gray-500">0</p>
+        </div>
+        <div class="bg-white p-4 shadow rounded text-center hover:shadow-md transition-shadow">
+            <h3 class="text-lg font-semibold text-gray-600">Leave</h3>
+            <p id="totalLeave" class="text-2xl font-bold mt-2 text-yellow-500">0</p>
+        </div>
+    </section>
+
+    <!-- DATE PICKER & CONTROLS -->
+    <section class="max-w-6xl mx-auto mt-8 flex flex-wrap items-center gap-4">
+        <label class="font-medium text-gray-700">Select Date:</label>
+        <input type="date" id="dateSelector"
+            class="p-2 border rounded bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+
+        <!-- REFRESH BUTTON -->
+        <button id="refreshBtn"
+            class="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                </path>
+            </svg>
+            Refresh
+        </button>
+
+        <!-- ADD ENTRY BUTTON -->
+        <button id="addEntryBtn"
+            class="bg-purple-600 text-white px-4 py-2 rounded shadow hover:bg-purple-700 transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Add Entry
+        </button>
+
+        <!-- BULK ADD BUTTON -->
+        <button id="bulkAddBtn"
+            class="bg-indigo-600 text-white px-4 py-2 rounded shadow hover:bg-indigo-700 transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z">
+                </path>
+            </svg>
+            Add All Members
+        </button>
+
+        <!-- LOADER -->
+        <div id="loader" class="hidden items-center gap-2">
+            <svg class="loader-spin h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                </path>
+            </svg>
+            <span class="text-gray-600">Loading...</span>
+        </div>
+
+        <!-- UNSAVED INDICATOR -->
+        <div id="unsavedIndicator" class="hidden text-orange-600 font-medium items-center gap-1">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clip-rule="evenodd"></path>
+            </svg>
+            Unsaved changes
+        </div>
+    </section>
+
+    <!-- ERROR MESSAGE -->
+    <section class="max-w-6xl mx-auto mt-4">
+        <div id="errorMessage"
+            class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded flex items-center justify-between">
+            <span id="errorText">Error loading data</span>
+            <button id="closeError" class="text-red-700 hover:text-red-900">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clip-rule="evenodd"></path>
+                </svg>
+            </button>
+        </div>
+    </section>
+
+    <!-- SUCCESS MESSAGE -->
+    <section class="max-w-6xl mx-auto mt-4">
+        <div id="successMessage"
+            class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded flex items-center justify-between">
+            <span id="successText">Success!</span>
+            <button id="closeSuccess" class="text-green-700 hover:text-green-900">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clip-rule="evenodd"></path>
+                </svg>
+            </button>
+        </div>
+    </section>
+
+    <!-- ATTENDANCE TABLE -->
+    <section id="tableSection" class="max-w-6xl mx-auto mt-6 bg-white p-6 shadow rounded">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-gray-800">Attendance Records</h2>
+            <span id="recordCount" class="text-gray-500 text-sm"></span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="p-3 border text-left font-semibold text-gray-700">Name</th>
+                        <th class="p-3 border text-left font-semibold text-gray-700">Punch-in</th>
+                        <th class="p-3 border text-left font-semibold text-gray-700">Punch-out</th>
+                        <th class="p-3 border text-left font-semibold text-gray-700">Status</th>
+                        <th class="p-3 border text-left font-semibold text-gray-700">Comments</th>
+                        <th class="p-3 border text-center font-semibold text-gray-700 w-20">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTable"></tbody>
+            </table>
+        </div>
+
+        <!-- SAVE BUTTONS -->
+        <div class="mt-6 flex gap-4">
+            <button id="saveAllBtn"
+                class="hidden bg-green-600 text-white px-6 py-2 rounded shadow hover:bg-green-700 transition-colors items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <span id="saveText">Save Changes</span>
+            </button>
+
+            <button id="cancelBtn"
+                class="hidden bg-gray-400 text-white px-6 py-2 rounded shadow hover:bg-gray-500 transition-colors">
+                Cancel
+            </button>
+        </div>
+    </section>
+
+    <!-- ADD ENTRY MODAL -->
+    <div id="addModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Add New Entry</h3>
+                <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="addEntryForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                    <input type="text" id="modalName" required
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        placeholder="Enter employee name">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Punch-in</label>
+                        <input type="time" id="modalPunchIn"
+                            class="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Punch-out</label>
+                        <input type="time" id="modalPunchOut"
+                            class="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select id="modalStatus"
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                        <option value="Ontime">Ontime</option>
+                        <option value="Late">Late</option>
+                        <option value="Absent">Absent</option>
+                        <option value="Leave">Leave</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                    <input type="text" id="modalComments"
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        placeholder="Optional comments">
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="submit"
+                        class="flex-1 bg-purple-600 text-white py-2 rounded hover:bg-purple-700 transition-colors">
+                        Add Entry
+                    </button>
+                    <button type="button" id="cancelModal"
+                        class="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- BULK ADD MODAL -->
+    <div id="bulkModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Add All Team Members</h3>
+                <button id="closeBulkModal" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <p class="text-gray-600 mb-4">This will add attendance entries for all team members from your Members list.
+            </p>
+
+            <div id="membersList" class="max-h-60 overflow-y-auto border rounded p-2 mb-4">
+                <p class="text-gray-500 text-center">Loading members...</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Default Status</label>
+                    <select id="bulkStatus"
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <option value="Absent">Absent</option>
+                        <option value="Ontime">Ontime</option>
+                        <option value="Leave">Leave</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Default Punch-in</label>
+                    <input type="time" id="bulkPunchIn"
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button id="confirmBulkAdd"
+                    class="flex-1 bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition-colors">
+                    Add Selected Members
+                </button>
+                <button id="cancelBulkModal"
+                    class="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="text-center text-gray-600 mt-10 p-4 border-t bg-white">
+        <p>Data powered by Google Sheets | SquidX © 2025</p>
+    </footer>
+
+    <script src="js/dashboard.js"></script>
+</body>
+
+</html>
